@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: controls
+          POSTGRES_PASSWORD: controls
+          POSTGRES_DB: controls_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U controls -d controls_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      CONTROLS_DATABASE_URL: postgresql+psycopg2://controls:controls@localhost:5432/controls_db
+      CONTROLS_TEST_DATABASE_URL: postgresql+psycopg2://controls:controls@localhost:5432/controls_test_db
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: install dependencies
+        run: pip install -r requirements.txt
+
+      - name: create the test database
+        run: >
+          PGPASSWORD=controls psql -h localhost -U controls -d controls_db
+          -c "CREATE DATABASE controls_test_db"
+
+      - name: tests with an 80% coverage gate
+        run: pytest -q --cov=controls_monitor --cov-report=term-missing --cov-fail-under=80
+
+      - name: gate - a clean company must produce zero exceptions
+        run: |
+          python -m controls_monitor.generator --reset
+          python -m controls_monitor run --fail-on low 2>/dev/null
+
+      - name: gate - planted violations must be detected as before
+        run: |
+          mkdir -p reports
+          python -m controls_monitor.generator --reset --with-violations
+          python -m controls_monitor evaluate --output reports/evaluation.md
+          # the scores are deterministic; if a control change moves them, update this line on purpose
+          grep -F "| **all** | | 48 | 38 | 10 | 31 | 11 | 0 | 77.6% | 79.2% |" reports/evaluation.md
+          code=0
+          python -m controls_monitor run --report reports/latest.md --metrics reports/controls_monitor.prom 2>reports/run.log || code=$?
+          echo "monitor exit code: $code"
+          # 1 means the monitor found exceptions, which is what this data is built to produce
+          test "$code" -eq 1
+
+      - name: upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controls-reports
+          path: reports/
+          if-no-files-found: ignore
