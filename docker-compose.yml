@@ -17,5 +17,18 @@ services:
       timeout: 3s
       retries: 10
 
+  # one-command demo:  docker compose run --rm demo
+  demo:
+    build: .
+    profiles: ["demo"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CONTROLS_DATABASE_URL: postgresql+psycopg2://controls:controls@db:5432/controls_db
+      CONTROLS_TEST_DATABASE_URL: postgresql+psycopg2://controls:controls@db:5432/controls_test_db
+    volumes:
+      - ./reports:/app/reports
+
 volumes:
   controls_pgdata:
