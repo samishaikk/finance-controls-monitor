@@ -2,7 +2,7 @@
 
 [![ci](https://github.com/samishaikk/finance-controls-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/samishaikk/finance-controls-monitor/actions/workflows/ci.yml)
 
-D:/SAMI-FILES/Finance Control Monitor/ci-run.png
+ci-run.png
 
 A small service that runs six automated controls over expense-reimbursement data in PostgreSQL, stores every run and every exception with evidence, and reports what it found. It also measures itself: known violations and look-alike legitimate cases are planted into the data, so each control's strengths and blind spots are shown with numbers instead of claims.
 
