@@ -1,6 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
+
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -17,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from controls_monitor.db import Base
 
 
-# the finance system being monitored 
+# ---------- input tables: the "finance system" being monitored ----------
 
 
 class Employee(Base):
@@ -76,7 +78,7 @@ class AuditLog(Base):
     __table_args__ = (Index("ix_audit_log_expense", "expense_id"),)
 
 
-
+# ---------- ground truth: what we deliberately planted ----------
 
 
 class InjectedViolation(Base):
@@ -91,9 +93,12 @@ class InjectedViolation(Base):
         ForeignKey("employees.id"), nullable=True
     )
     note: Mapped[str] = mapped_column(String(255), default="")
+    # False = a real violation (should be caught); True = a legitimate look-alike (decoy)
+    is_decoy: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
-# output tables
+# ---------- output tables: what the monitor produces ----------
+
 
 class ControlRun(Base):
     __tablename__ = "control_runs"

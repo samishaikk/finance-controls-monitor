@@ -1,10 +1,15 @@
 import argparse
 import logging
 import sys
-
 from sqlalchemy import select
 from controls_monitor.config import SEVERITY_ORDER, ConfigError, load_config
 from controls_monitor.db import make_engine, make_session_factory
+from controls_monitor.evaluation import (
+    EvaluationError,
+    evaluate_run,
+    format_markdown,
+    format_table,
+)
 from controls_monitor.logging_setup import configure_logging, log_event
 from controls_monitor.metrics import MetricsError, render, write_metrics
 from controls_monitor.models import ControlRun
@@ -15,6 +20,8 @@ from controls_monitor.runner import (
     exit_code,
     run_all,
 )
+
+
 def format_summary(summary, fail_on, code):
     lines = [
         f"run {summary.run_id} finished: {summary.status}, "
@@ -73,6 +80,31 @@ def cmd_run(args, engine):
             print(f"{label} written to {path}")
             log_event(logger, f"{label}_written", run_id=summary.run_id, path=str(path))
     return code
+
+
+def cmd_evaluate(args, engine):
+    configure_logging(args.log_level)
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        print(exc, file=sys.stderr)
+        return EXIT_ERROR
+    with make_session_factory(engine)() as session:
+        summary = run_all(session, config)
+        try:
+            scores = evaluate_run(session, summary.run_id)
+        except EvaluationError as exc:
+            print(exc, file=sys.stderr)
+            return EXIT_ERROR
+        markdown = format_markdown(scores, summary.run_id)
+    print(f"evaluation of run {summary.run_id} against the planted cases")
+    print()
+    print(format_table(scores))
+    if args.output:
+        path = write_report(markdown, args.output)
+        print()
+        print(f"evaluation written to {path}")
+    return 0
 
 
 def cmd_metrics(args, engine):
@@ -141,6 +173,14 @@ def build_parser():
                      choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                      help="JSON log level on stderr (default INFO)")
     run.set_defaults(func=cmd_run)
+
+    ev = sub.add_parser("evaluate", help="run the monitor and score it against the planted cases")
+    ev.add_argument("--config", help="path to a controls YAML file")
+    ev.add_argument("--output", help="also write the evaluation as markdown to this path")
+    ev.add_argument("--log-level", default="WARNING",
+                    choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                    help="JSON log level on stderr (default WARNING)")
+    ev.set_defaults(func=cmd_evaluate)
 
     met = sub.add_parser("metrics", help="print or write Prometheus metrics for a stored run")
     met.add_argument("--run-id", type=int, help="default: the latest run")

@@ -1,6 +1,3 @@
-"""Building a clean, deterministic synthetic company.
-"""
-
 import argparse
 import random
 from datetime import datetime, timedelta, timezone
@@ -17,7 +14,7 @@ BASE_MONDAY = datetime(2026, 1, 5, tzinfo=timezone.utc)
 WEEKS = 12
 DEPARTMENTS = ["Sales", "Engineering", "Marketing", "Finance", "Support"]
 EMPLOYEES_PER_MANAGER = 8
-REJECT_RATE = 0.08
+REJECT_RATE = 0.30
 
 FIRST_NAMES = [
     "Asha", "Ravi", "Meera", "Karan", "Divya", "Arjun",
@@ -28,7 +25,7 @@ LAST_NAMES = [
     "Sharma", "Menon", "Patel", "Das", "Joshi", "Khan",
 ]
 
-# category -> (vendors, min amount, max amount)
+# category -> (vendors, min amount, max amount); all stay under the 500 approval limit
 EXPENSE_TYPES = {
     "Travel": (["Metro Cabs", "SkyJet Airways", "CityRail"], 30, 450),
     "Meals": (["Green Bowl Cafe", "Urban Kitchen", "Spice Route"], 12, 95),
@@ -73,7 +70,7 @@ def make_employees(session, rng):
             manager_id=manager_id,
         )
         session.add(emp)
-        session.flush() 
+        session.flush()  # gives the row its id
         return emp
 
     ceo = new_employee("Executive", "CEO", None)
@@ -86,13 +83,13 @@ def make_employees(session, rng):
     return employees
 
 
-def make_expenses(session, rng, employees):
+def make_expenses(session, rng, employees, receipt_prefix="RC"):
     expenses = []
-    seen = set()  
+    seen = set()  # (employee_id, vendor, amount) must never repeat
     receipt_counter = 0
 
     for emp in employees:
-        if emp.manager_id is None: 
+        if emp.manager_id is None:  # the CEO does not submit claims
             continue
         weeks = sorted(rng.sample(range(WEEKS), rng.randint(8, 12)))
         for week in weeks:
@@ -121,13 +118,13 @@ def make_expenses(session, rng, employees):
                 employee_id=emp.id,
                 category=category,
                 vendor=vendor,
-                receipt_number=f"RC-{receipt_counter:06d}",
+                receipt_number=f"{receipt_prefix}-{receipt_counter:06d}",
                 amount=amount,
                 currency="USD",
                 description=f"{category} - {vendor}",
                 status="rejected" if rng.random() < REJECT_RATE else "approved",
                 submitted_at=submitted,
-                approver_id=emp.manager_id,  
+                approver_id=emp.manager_id,  # clean data: the manager approves
                 approved_at=decided,
             )
             session.add(expense)
@@ -151,7 +148,7 @@ def make_audit_log(session, expenses):
             AuditLog(
                 expense_id=exp.id,
                 actor_id=exp.approver_id,
-                action=exp.status,  
+                action=exp.status,  # "approved" or "rejected"
                 created_at=exp.approved_at,
             )
         )
@@ -172,9 +169,14 @@ def seed_clean_org(session, seed=42):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="seed controls_db with a clean company")
+    parser = argparse.ArgumentParser(description="seed controls_db with a company")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--reset", action="store_true", help="wipe all tables first")
+    parser.add_argument(
+        "--with-violations",
+        action="store_true",
+        help="also plant known violations and decoys (see injector.py)",
+    )
     args = parser.parse_args()
 
     engine = make_engine()
@@ -186,10 +188,21 @@ def main():
         if session.scalar(select(func.count()).select_from(Employee)):
             raise SystemExit("database already has data - run again with --reset")
         summary = seed_clean_org(session, args.seed)
+        planted = None
+        if args.with_violations:
+            from controls_monitor.injector import inject_violations
+
+            planted = inject_violations(session, args.seed)
     print(
         f"seeded {summary['employees']} employees, "
         f"{summary['expenses']} expenses, {summary['audit_rows']} audit rows"
     )
+    if planted:
+        for control_id, counts in planted.items():
+            print(
+                f"  planted {control_id}: {counts['violations']} violations, "
+                f"{counts['decoys']} decoys"
+            )
 
 
 if __name__ == "__main__":
