@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import text
+
 from controls_monitor import models  # noqa: F401
 from controls_monitor.db import (
     TEST_DATABASE_URL,
@@ -7,6 +7,7 @@ from controls_monitor.db import (
     make_engine,
     make_session_factory,
 )
+from controls_monitor.init_db import truncate_all
 
 
 @pytest.fixture(scope="session")
@@ -25,6 +26,4 @@ def db(engine):
         yield session
     finally:
         session.close()
-        tables = ", ".join(t.name for t in reversed(Base.metadata.sorted_tables))
-        with engine.begin() as conn:
-            conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+        truncate_all(engine)

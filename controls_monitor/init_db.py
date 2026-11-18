@@ -1,6 +1,7 @@
 import sys
-from sqlalchemy import inspect
-from controls_monitor import models  # noqa: F401 
+
+from sqlalchemy import inspect, text
+from controls_monitor import models  # noqa: F401  (registers the tables)
 from controls_monitor.db import Base, make_engine
 
 
@@ -10,6 +11,12 @@ def create_tables(engine):
 
 def drop_tables(engine):
     Base.metadata.drop_all(engine)
+
+
+def truncate_all(engine):
+    tables = ", ".join(t.name for t in reversed(Base.metadata.sorted_tables))
+    with engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
 
 
 def main():
