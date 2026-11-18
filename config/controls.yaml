@@ -1,0 +1,46 @@
+# Thresholds for the six finance controls.
+
+
+fail_on_severity: high  
+
+controls:
+  C1:
+    name: Duplicate claims
+    enabled: true
+    severity: high
+    window_days: 7            
+
+  C2:
+    name: Split claims under the approval limit
+    enabled: true
+    severity: high
+    approval_limit: 500       
+    window_hours: 24          
+    min_claims: 2             
+
+  C3:
+    name: Approver is not the employee's manager
+    enabled: true
+    severity: critical
+    allow_skip_level: true    
+
+  C4:
+    name: Approval too fast to be a real review
+    enabled: true
+    severity: medium
+    min_review_seconds: 120   
+
+  C5:
+    name: Approval-rate outlier manager
+    enabled: true
+    severity: medium
+    min_decisions: 30         # ignore managers with fewer decisions than this
+    min_rate_gap_points: 10   # flag if approval rate is this many points above the peer median
+
+  C6:
+    name: Off-hours or weekend approval
+    enabled: true
+    severity: low
+    business_start_hour: 9    # UTC, inclusive
+    business_end_hour: 18     # UTC, exclusive
+    flag_weekends: true
