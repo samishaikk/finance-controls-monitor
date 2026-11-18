@@ -1,0 +1,44 @@
+# HELP controls_monitor_run_duration_seconds Wall-clock duration of the run.
+# TYPE controls_monitor_run_duration_seconds gauge
+controls_monitor_run_duration_seconds 0.068655
+# HELP controls_monitor_last_run_timestamp_seconds Unix time the run finished.
+# TYPE controls_monitor_last_run_timestamp_seconds gauge
+controls_monitor_last_run_timestamp_seconds 1.795008730525174e+09
+# HELP controls_monitor_last_successful_run_timestamp_seconds Unix time of the most recent run in which every control executed.
+# TYPE controls_monitor_last_successful_run_timestamp_seconds gauge
+controls_monitor_last_successful_run_timestamp_seconds 1.795008730525174e+09
+# HELP controls_monitor_last_run_success 1 if every control executed in the run, else 0.
+# TYPE controls_monitor_last_run_success gauge
+controls_monitor_last_run_success 1.0
+# HELP controls_monitor_exceptions Exceptions found by a control in the run.
+# TYPE controls_monitor_exceptions gauge
+controls_monitor_exceptions{control_id="C1",severity="high"} 10.0
+controls_monitor_exceptions{control_id="C2",severity="high"} 12.0
+controls_monitor_exceptions{control_id="C3",severity="critical"} 10.0
+controls_monitor_exceptions{control_id="C4",severity="medium"} 7.0
+controls_monitor_exceptions{control_id="C5",severity="medium"} 2.0
+controls_monitor_exceptions{control_id="C6",severity="low"} 8.0
+# HELP controls_monitor_control_duration_seconds Time a control took.
+# TYPE controls_monitor_control_duration_seconds gauge
+controls_monitor_control_duration_seconds{control_id="C1"} 0.039
+controls_monitor_control_duration_seconds{control_id="C2"} 0.003
+controls_monitor_control_duration_seconds{control_id="C3"} 0.001
+controls_monitor_control_duration_seconds{control_id="C4"} 0.001
+controls_monitor_control_duration_seconds{control_id="C5"} 0.001
+controls_monitor_control_duration_seconds{control_id="C6"} 0.001
+# HELP controls_monitor_control_errored 1 if the control crashed instead of finishing.
+# TYPE controls_monitor_control_errored gauge
+controls_monitor_control_errored{control_id="C1"} 0.0
+controls_monitor_control_errored{control_id="C2"} 0.0
+controls_monitor_control_errored{control_id="C3"} 0.0
+controls_monitor_control_errored{control_id="C4"} 0.0
+controls_monitor_control_errored{control_id="C5"} 0.0
+controls_monitor_control_errored{control_id="C6"} 0.0
+# HELP controls_monitor_exceptions_at_or_above_threshold Exceptions at or above the run's fail threshold (what would fail CI).
+# TYPE controls_monitor_exceptions_at_or_above_threshold gauge
+controls_monitor_exceptions_at_or_above_threshold 32.0
+# HELP controls_monitor_runs Number of stored runs, by status.
+# TYPE controls_monitor_runs gauge
+controls_monitor_runs{status="success"} 2.0
+controls_monitor_runs{status="error"} 0.0
+controls_monitor_runs{status="running"} 0.0
