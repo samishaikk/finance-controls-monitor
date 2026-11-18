@@ -1,9 +1,12 @@
 import argparse
+import logging
 import sys
 
 from sqlalchemy import select
 from controls_monitor.config import SEVERITY_ORDER, ConfigError, load_config
 from controls_monitor.db import make_engine, make_session_factory
+from controls_monitor.logging_setup import configure_logging, log_event
+from controls_monitor.metrics import MetricsError, render, write_metrics
 from controls_monitor.models import ControlRun
 from controls_monitor.report import ReportError, build_report, latest_run_id, write_report
 from controls_monitor.runner import (
@@ -45,7 +48,11 @@ def format_summary(summary, fail_on, code):
     return "\n".join(lines)
 
 
+logger = logging.getLogger("controls_monitor.cli")
+
+
 def cmd_run(args, engine):
+    configure_logging(args.log_level)
     try:
         config = load_config(args.config)
     except ConfigError as exc:
@@ -54,14 +61,36 @@ def cmd_run(args, engine):
     fail_on = args.fail_on or config.fail_on_severity
     with make_session_factory(engine)() as session:
         summary = run_all(session, config)
-        report_path = None
+        report_path = metrics_path = None
         if args.report:
             report_path = write_report(build_report(session, summary.run_id), args.report)
+        if args.metrics:
+            metrics_path = write_metrics(session, summary.run_id, args.metrics)
     code = exit_code(summary, fail_on)
     print(format_summary(summary, fail_on, code))
-    if report_path:
-        print(f"report written to {report_path}")
+    for label, path in (("report", report_path), ("metrics", metrics_path)):
+        if path:
+            print(f"{label} written to {path}")
+            log_event(logger, f"{label}_written", run_id=summary.run_id, path=str(path))
     return code
+
+
+def cmd_metrics(args, engine):
+    with make_session_factory(engine)() as session:
+        run_id = args.run_id or latest_run_id(session)
+        if run_id is None:
+            print("no runs yet - run the monitor first", file=sys.stderr)
+            return EXIT_ERROR
+        try:
+            if args.output:
+                path = write_metrics(session, run_id, args.output)
+                print(f"metrics written to {path}")
+            else:
+                print(render(session, run_id), end="")
+        except MetricsError as exc:
+            print(exc, file=sys.stderr)
+            return EXIT_ERROR
+    return 0
 
 
 def cmd_report(args, engine):
@@ -107,7 +136,16 @@ def build_parser():
     run.add_argument("--fail-on", choices=sorted(SEVERITY_ORDER, key=SEVERITY_ORDER.get),
                      help="override fail_on_severity from the config")
     run.add_argument("--report", help="also write a markdown report to this path")
+    run.add_argument("--metrics", help="also write Prometheus metrics (.prom) to this path")
+    run.add_argument("--log-level", default="INFO",
+                     choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                     help="JSON log level on stderr (default INFO)")
     run.set_defaults(func=cmd_run)
+
+    met = sub.add_parser("metrics", help="print or write Prometheus metrics for a stored run")
+    met.add_argument("--run-id", type=int, help="default: the latest run")
+    met.add_argument("--output", help="write to this file instead of printing")
+    met.set_defaults(func=cmd_metrics)
 
     rep = sub.add_parser("report", help="build a markdown report for a stored run")
     rep.add_argument("--run-id", type=int, help="default: the latest run")
